@@ -1,12 +1,22 @@
 from os.path import exists, isdir, basename, join, splitext
-import sift
+
+import pickle
+
+import _pickle
+import scipy
+import scipy.stats
+
+# import sift
 from glob import glob
 from numpy import zeros, resize, sqrt, histogram, hstack, vstack, savetxt, zeros_like
 import scipy.cluster.vq as vq
-import libsvm
-from cPickle import dump, HIGHEST_PROTOCOL
-import argparse
-
+# import libsvm
+# from cPickle import dump, HIGHEST_PROTOCOL,load
+# import argparse
+import cv2 as cv
+from sklearn import svm, preprocessing
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.model_selection import RandomizedSearchCV
 
 EXTENSIONS = [".jpg", ".bmp", ".png", ".pgm", ".tif", ".tiff"]
 DATASETPATH = '../dataset'
@@ -15,12 +25,6 @@ HISTOGRAMS_FILE = 'trainingdata.svm'
 K_THRESH = 1  # early stopping threshold for kmeans originally at 1e-5, increased for speedup
 CODEBOOK_FILE = 'codebook.file'
 
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='train a visual bag of words model')
-    parser.add_argument('-d', help='path to the dataset', required=False, default=DATASETPATH)
-    args = parser.parse_args()
-    return args
 
 
 def get_categories(datasetpath):
@@ -49,15 +53,24 @@ def extractSift(input_files):
             print("calculating sift features for", fname)
             sift.process_image(fname, features_fname)
         print("gathering sift features for", fname)
-        locs, descriptors = sift.read_features_from_file(features_fname)
+        img1 = cv.imread(fname, 0)  # queryImage
+        # Initiate SIFT detector
+        # orb = cv.ORB_create(150)
+        sift = cv.xfeatures2d.SIFT_create(150)
+        # sift = cv.SIFT_create(150)
+        # t = cv.xfeatures2d.SIFT_create(200)
+        # Compute keypoints
+        # locs, descriptors = orb.detectAndCompute(img1, None)
+        locs,descriptors = sift.detectAndCompute(img1,None)
+        # locs, descriptors = sift.read_features_from_file(features_fname)
         print(descriptors.shape)
         all_features_dict[fname] = descriptors
     return all_features_dict
 
-
+number_of_descriptors = 128
 def dict2numpy(dict):
     nkeys = len(dict)
-    array = zeros((nkeys * PRE_ALLOCATION_BUFFER, 128))
+    array = zeros((nkeys * PRE_ALLOCATION_BUFFER, number_of_descriptors))
     pivot = 0
     for key in dict.keys():
         value = dict[key]
@@ -67,7 +80,7 @@ def dict2numpy(dict):
             array = vstack((array, padding))
         array[pivot:pivot + nelements] = value
         pivot += nelements
-    array = resize(array, (pivot, 128))
+    array = resize(array, (pivot, number_of_descriptors))
     return array
 
 
@@ -96,11 +109,25 @@ def writeHistogramsToFile(nwords, labels, fnames, all_word_histgrams, features_f
     savetxt(features_fname, data_rows, fmt)
 
 
+def stackHistogramData(nwords, labels, fnames, all_word_histgrams):
+    data_rows = zeros(nwords + 1)  # +1 for the category label
+    for fname in fnames:
+        histogram = all_word_histgrams[fname]
+        if (histogram.shape[0] != nwords):  # scipy deletes empty clusters
+            nwords = histogram.shape[0]
+            data_rows = zeros(nwords + 1)
+            print('nclusters have been reduced to ' + str(nwords))
+        data_row = hstack((labels[fname], histogram))
+        data_rows = vstack((data_rows, data_row))
+    data_rows = data_rows[1:]
+    return data_rows
+
+
+path = "/mnt/hgfs/PycharmProjects/objectdetectioncamera/corpus/train/"
 if __name__ == '__main__':
     print("---------------------")
     print("## loading the images and extracting the sift features")
-    args = parse_arguments()
-    datasetpath = args.d
+    datasetpath = path
     cats = get_categories(datasetpath)
     ncats = len(cats)
     print("searching for folders at " + datasetpath)
@@ -128,14 +155,14 @@ if __name__ == '__main__':
     all_features_array = dict2numpy(all_features)
     nfeatures = all_features_array.shape[0]
     nclusters = int(sqrt(nfeatures))
-    codebook, distortion = vq.kmeans(all_features_array,
-                                             nclusters,
-                                             thresh=K_THRESH)
+    # codebook, distortion = vq.kmeans(all_features_array,
+    #                                          nclusters,
+    #                                          thresh=1e-3)
 
-    with open(datasetpath + CODEBOOK_FILE, 'wb') as f:
-
-        dump(codebook, f, protocol=HIGHEST_PROTOCOL)
-
+    # with open(datasetpath + CODEBOOK_FILE, 'wb') as f:
+    #     _pickle.dump(codebook, f)
+    with open(datasetpath+CODEBOOK_FILE,'rb') as f:
+        codebook = _pickle.load(f,encoding="latin1")
     print("---------------------")
     print("## compute the visual words histograms for each image")
     all_word_histgrams = {}
@@ -145,20 +172,39 @@ if __name__ == '__main__':
 
     print("---------------------")
     print("## write the histograms to file to pass it to the svm")
-    writeHistogramsToFile(nclusters,
-                          all_files_labels,
-                          all_files,
-                          all_word_histgrams,
-                          datasetpath + HISTOGRAMS_FILE)
-
+    # writeHistogramsToFile(nclusters,
+    #                       all_files_labels,
+    #                       all_files,
+    #                       all_word_histgrams,
+    #                       datasetpath + HISTOGRAMS_FILE)
+    X = stackHistogramData(nclusters,
+                           all_files_labels,
+                           all_files,
+                           all_word_histgrams)
+    pickle.dump(X,open("xfeatures_array.pickle","wb"))
+    all = pickle.load(open("xfeatures_array.pickle","rb"),encoding="latin1")
+    X = all[:,1:]
+    y = all[:,0]
     print("---------------------")
     print("## train svm")
-    c, g, rate, model_file = libsvm.grid(datasetpath + HISTOGRAMS_FILE,
-                                         png_filename='grid_res_img_file.png')
+    # randomized_search_params = {'C': scipy.stats.expon(), 'gamma': scipy.stats.expon(scale=.1),
+    #  'kernel': ['rbf'], 'class_weight': ['balanced', None]}
+    svm_model = svm.SVC()
+    svm_model = GaussianProcessClassifier()
+    # svm_model
+    X_scaled = preprocessing.scale(X)
+    svm_model.fit(X_scaled,y)
+
+    # r = RandomizedSearchCV(svm_model,randomized_search_params,n_jobs=8,n_iter=10)
+    # r.fit(X_scaled, y)
+    model_file = open("scikit_svm.model","wb")
+    pickle.dump(svm_model,model_file)
+    # c, g, rate, model_file = libsvm.grid(datasetpath + HISTOGRAMS_FILE,
+    #                                      png_filename='grid_res_img_file.png')
 
     print("--------------------")
     print("## outputting results")
-    print("model file: " + datasetpath + model_file)
+    print("model file: " + datasetpath + str(model_file))
     print("codebook file: " + datasetpath + CODEBOOK_FILE)
     print("category      ==>  label")
     for cat in cat_label:
