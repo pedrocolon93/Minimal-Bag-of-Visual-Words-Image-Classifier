@@ -1,18 +1,12 @@
 from os.path import exists, isdir, basename, join, splitext
-
 import pickle
-
 import _pickle
 import scipy
 import scipy.stats
 
-# import sift
 from glob import glob
 from numpy import zeros, resize, sqrt, histogram, hstack, vstack, savetxt, zeros_like
 import scipy.cluster.vq as vq
-# import libsvm
-# from cPickle import dump, HIGHEST_PROTOCOL,load
-# import argparse
 import cv2 as cv
 from sklearn import svm, preprocessing
 from sklearn.gaussian_process import GaussianProcessClassifier
@@ -155,9 +149,9 @@ if __name__ == '__main__':
     all_features_array = dict2numpy(all_features)
     nfeatures = all_features_array.shape[0]
     nclusters = int(sqrt(nfeatures))
-    # codebook, distortion = vq.kmeans(all_features_array,
-    #                                          nclusters,
-    #                                          thresh=1e-3)
+    codebook, distortion = vq.kmeans(all_features_array,
+                                             nclusters,
+                                             thresh=K_THRESH)
 
     # with open(datasetpath + CODEBOOK_FILE, 'wb') as f:
     #     _pickle.dump(codebook, f)

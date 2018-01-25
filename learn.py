@@ -4,7 +4,7 @@ from glob import glob
 from numpy import zeros, resize, sqrt, histogram, hstack, vstack, savetxt, zeros_like
 import scipy.cluster.vq as vq
 import libsvm
-from cPickle import dump, HIGHEST_PROTOCOL
+from _pickle import dump, HIGHEST_PROTOCOL
 import argparse
 
 
