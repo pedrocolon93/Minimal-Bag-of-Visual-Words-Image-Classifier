@@ -9,14 +9,18 @@ from numpy import zeros, resize, sqrt, histogram, hstack, vstack, savetxt, zeros
 import scipy.cluster.vq as vq
 import cv2 as cv
 from sklearn import svm, preprocessing
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import StandardScaler
 
 EXTENSIONS = [".jpg", ".bmp", ".png", ".pgm", ".tif", ".tiff"]
 DATASETPATH = '../dataset'
 PRE_ALLOCATION_BUFFER = 1000  # for sift
 HISTOGRAMS_FILE = 'trainingdata.svm'
-K_THRESH = 1  # early stopping threshold for kmeans originally at 1e-5, increased for speedup
+K_THRESH = 1#e-1  # early stopping threshold for kmeans originally at 1e-5, increased for speedup
 CODEBOOK_FILE = 'codebook.file'
 
 
@@ -42,15 +46,15 @@ def extractSift(input_files):
     print("extracting Sift features")
     all_features_dict = {}
     for i, fname in enumerate(input_files):
-        features_fname = fname + '.sift'
-        if exists(features_fname) == False:
-            print("calculating sift features for", fname)
-            sift.process_image(fname, features_fname)
+        # features_fname = fname + '.sift'
+        # if exists(features_fname) == False:
+        #     print("calculating sift features for", fname)
+        #     sift.process_image(fname, features_fname)
         print("gathering sift features for", fname)
         img1 = cv.imread(fname, 0)  # queryImage
         # Initiate SIFT detector
-        # orb = cv.ORB_create(150)
-        sift = cv.xfeatures2d.SIFT_create(150)
+        sift = cv.ORB_create(1000)
+        # sift = cv.xfeatures2d.SIFT_create()
         # sift = cv.SIFT_create(150)
         # t = cv.xfeatures2d.SIFT_create(200)
         # Compute keypoints
@@ -61,7 +65,7 @@ def extractSift(input_files):
         all_features_dict[fname] = descriptors
     return all_features_dict
 
-number_of_descriptors = 128
+number_of_descriptors = 32
 def dict2numpy(dict):
     nkeys = len(dict)
     array = zeros((nkeys * PRE_ALLOCATION_BUFFER, number_of_descriptors))
@@ -117,7 +121,7 @@ def stackHistogramData(nwords, labels, fnames, all_word_histgrams):
     return data_rows
 
 
-path = "/mnt/hgfs/PycharmProjects/objectdetectioncamera/corpus/train/"
+path = "/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/train"
 if __name__ == '__main__':
     print("---------------------")
     print("## loading the images and extracting the sift features")
@@ -148,15 +152,16 @@ if __name__ == '__main__':
     print("## computing the visual words via k-means")
     all_features_array = dict2numpy(all_features)
     nfeatures = all_features_array.shape[0]
-    nclusters = int(sqrt(nfeatures))
+    # nclusters = int(sqrt(nfeatures))
+    nclusters = 1000
     codebook, distortion = vq.kmeans(all_features_array,
                                              nclusters,
                                              thresh=K_THRESH)
 
-    # with open(datasetpath + CODEBOOK_FILE, 'wb') as f:
-    #     _pickle.dump(codebook, f)
-    with open(datasetpath+CODEBOOK_FILE,'rb') as f:
-        codebook = _pickle.load(f,encoding="latin1")
+    with open(datasetpath + CODEBOOK_FILE, 'wb') as f:
+        _pickle.dump(codebook, f)
+    # with open(datasetpath+CODEBOOK_FILE,'rb') as f:
+    #     codebook = _pickle.load(f,encoding="latin1")
     print("---------------------")
     print("## compute the visual words histograms for each image")
     all_word_histgrams = {}
@@ -181,18 +186,41 @@ if __name__ == '__main__':
     y = all[:,0]
     print("---------------------")
     print("## train svm")
-    # randomized_search_params = {'C': scipy.stats.expon(), 'gamma': scipy.stats.expon(scale=.1),
-    #  'kernel': ['rbf'], 'class_weight': ['balanced', None]}
+    randomized_search_params = {'C': scipy.stats.expon(), 'gamma': scipy.stats.expon(scale=.1),
+     'kernel': ['rbf'], 'class_weight': ['balanced', None]}
     svm_model = svm.SVC()
-    svm_model = GaussianProcessClassifier()
+    # svm_model = RandomForestClassifier()
+    # svm_model = GaussianProcessClassifier()
     # svm_model
-    X_scaled = preprocessing.scale(X)
+    scale = StandardScaler().fit(X)
+    X_scaled = scale.transform(X)
+    # X_scaled = preprocessing.scale(X)
     svm_model.fit(X_scaled,y)
+    scores = cross_val_score(svm_model, X_scaled, y, cv=5)
+    parameter_opt = {'C': scipy.stats.expon(scale=100), 'gamma': scipy.stats.expon(scale=.1),
+     'kernel': ['rbf'], 'class_weight': ['balanced', None]}
+    # rscv = RandomizedSearchCV(svm_model,parameter_opt,n_jobs=12,n_iter=12)
+    # rscv.fit(X_scaled,y)
+    print("scores")
+    print(scores)
+    # scores2 = cross_val_score(rscv.best_estimator_,X_scaled,y)
+    # print(scores2)
+    tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8],
+                         'C': [1, 10, 100, 1000]}]
+    print("---------------------")
+    print("## optimize svm")
+    gscv = GridSearchCV(svm_model,tuned_parameters,n_jobs=12)
+    gscv.fit(X_scaled,y)
+    print("optimized scores")
+    print(cross_val_score(gscv.best_estimator_,X_scaled,y,cv=5))
+    svm_model = gscv.best_estimator_
 
     # r = RandomizedSearchCV(svm_model,randomized_search_params,n_jobs=8,n_iter=10)
     # r.fit(X_scaled, y)
-    model_file = open("scikit_svm.model","wb")
+    model_file = open("svm_model","wb")
     pickle.dump(svm_model,model_file)
+    scale_file = open("scale","wb")
+    pickle.dump(scale,scale_file)
     # c, g, rate, model_file = libsvm.grid(datasetpath + HISTOGRAMS_FILE,
     #                                      png_filename='grid_res_img_file.png')
 

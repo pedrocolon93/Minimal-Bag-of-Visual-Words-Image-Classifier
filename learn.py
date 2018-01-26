@@ -4,7 +4,7 @@ from glob import glob
 from numpy import zeros, resize, sqrt, histogram, hstack, vstack, savetxt, zeros_like
 import scipy.cluster.vq as vq
 import libsvm
-from _pickle import dump, HIGHEST_PROTOCOL
+from cPickle import dump, HIGHEST_PROTOCOL
 import argparse
 
 
@@ -99,8 +99,9 @@ def writeHistogramsToFile(nwords, labels, fnames, all_word_histgrams, features_f
 if __name__ == '__main__':
     print("---------------------")
     print("## loading the images and extracting the sift features")
-    args = parse_arguments()
-    datasetpath = args.d
+    # args = parse_arguments()
+    # datasetpath = args.d
+    datasetpath = "/home/pedro/Downloads/101_ObjectCategories"
     cats = get_categories(datasetpath)
     ncats = len(cats)
     print("searching for folders at " + datasetpath)

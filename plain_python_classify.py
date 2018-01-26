@@ -41,17 +41,16 @@ all_files = []
 all_files_labels = {}
 all_features = {}
 
-# args = parse_arguments()
 model_file = "/mnt/hgfs/PycharmProjects/objectdetectioncamera/corpus/train/trainingdata.svm.model"
-codebook_file = "/mnt/hgfs/PycharmProjects/objectdetectioncamera/corpus/train/codebook.file"
+codebook_file = "/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/traincodebook.file"
 
-fnames = ["/home/pedro/Documents/101traintest/test/accordion/image_0008.jpg",
-"/home/pedro/Documents/101traintest/test/accordion/image_0011.jpg",
-"/home/pedro/Documents/101traintest/test/accordion/image_0020.jpg",
-"/home/pedro/Documents/101traintest/test/accordion/image_0045.jpg",
-"/home/pedro/Documents/101traintest/test/accordion/image_0051.jpg",
-"/home/pedro/Documents/101traintest/test/accordion/image_0052.jpg"]
-# fnames = ["/home/pedro/Documents/101traintest/test/yin_yang/image_0006.jpg"]
+fnames = [
+"/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/test/accordion/image_0001.jpg",
+"/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/test/accordion/image_0002.jpg",
+"/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/test/accordion/image_0003.jpg",
+"/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/test/accordion/image_0004.jpg",
+"/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/test/accordion/image_0005.jpg"
+]
 all_features = extractSift(fnames)
 for i in fnames:
     all_files_labels[i] = 0  # label is unknown
@@ -82,9 +81,11 @@ X = stackHistogramData(nclusters,
                            all_word_histgrams)
 print("---------------------")
 print("## test data with svm")
-model_file = open("scikit_svm.model","rb")
+model_file = open("svm_model","rb")
 svm_model = _pickle.load(model_file)
+scale_file = open("scale","rb")
+scale = _pickle.load(scale_file)
 X = X[:,1:]
-X_scaled = preprocessing.scale(X)
+X_scaled = scale.transform(X)
 print(svm_model.predict(X))
 # print(libsvm.test(HISTOGRAMS_FILE, model_file))
