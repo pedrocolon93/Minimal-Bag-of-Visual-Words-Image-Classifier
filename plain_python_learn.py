@@ -17,11 +17,12 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 
 EXTENSIONS = [".jpg", ".bmp", ".png", ".pgm", ".tif", ".tiff"]
-DATASETPATH = '../dataset'
+# DATASETPATH = '../dataset'
 PRE_ALLOCATION_BUFFER = 1000  # for sift
 HISTOGRAMS_FILE = 'trainingdata.svm'
 K_THRESH = 1#e-1  # early stopping threshold for kmeans originally at 1e-5, increased for speedup
 CODEBOOK_FILE = 'codebook.file'
+path = "corpus/train"
 
 
 
@@ -121,7 +122,6 @@ def stackHistogramData(nwords, labels, fnames, all_word_histgrams):
     return data_rows
 
 
-path = "/home/pedro/Documents/hover/hover_client/dependencies/Minimal-Bag-of-Visual-Words-Image-Classifier/corpus/train"
 if __name__ == '__main__':
     print("---------------------")
     print("## loading the images and extracting the sift features")
